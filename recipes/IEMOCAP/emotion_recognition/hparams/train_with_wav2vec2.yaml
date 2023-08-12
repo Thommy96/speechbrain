@@ -9,7 +9,7 @@ seed: 1993
 __set_seed: !apply:torch.manual_seed [!ref <seed>]
 
 # Dataset will be downloaded to the `data_original`
-data_folder: !PLACEHOLDER  # e.g., /path/to/IEMOCAP_full_release
+data_folder: !ref /mount/resources/speech/corpora/Emotional_Speech_Dataset_Singapore  # e.g., /path/to/IEMOCAP_full_release
 output_folder: !ref results/train_with_wav2vec2/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
@@ -54,7 +54,7 @@ freeze_wav2vec2_conv: True
 encoder_dim: 768
 
 # Number of emotions
-out_n_neurons: 4 # (anger, happiness, sadness, neutral)
+out_n_neurons: 5 # (anger, joy, neutral, sadness, surprise)
 
 dataloader_options:
     batch_size: !ref <batch_size>

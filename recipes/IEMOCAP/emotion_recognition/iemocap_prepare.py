@@ -16,6 +16,7 @@ import json
 import random
 import logging
 from speechbrain.dataio.dataio import read_audio
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 SAMPLERATE = 16000
@@ -65,7 +66,7 @@ def prepare_data(
     >>> data_original = '/path/to/iemocap/IEMOCAP_full_release'
     >>> prepare_data(data_original, 'train.json', 'valid.json', 'test.json')
     """
-    data_original = data_original + "/Session"
+    data_original = data_original
     # setting seeds for reproducible code.
     random.seed(seed)
 
@@ -76,11 +77,8 @@ def prepare_data(
 
     speaker_dict = transform_data(data_original)
 
-    if sum([len(value) for value in speaker_dict.values()]) != NUMBER_UTT:
-        logger.error(
-            "Error: Number of utterances is not 5531, please check your IEMOCAP folder"
-        )
-        sys.exit()
+    print("Number of utterances:")
+    print(sum([len(value) for value in speaker_dict.values()]))
 
     # List files and create manifest from list
     logger.info(
@@ -172,7 +170,7 @@ def split_different_speakers(speaker_dict, test_spk_id):
     dictionary containing train, valid, and test splits.
     """
     data_split = {k: [] for k in ["train", "valid", "test"]}
-    data_split["test"].extend(speaker_dict[str(test_spk_id)])
+    data_split["test"].extend(speaker_dict[test_spk_id])
 
     # use the speaker in the same session as validation set
     if test_spk_id % 2 == 0:
@@ -180,11 +178,11 @@ def split_different_speakers(speaker_dict, test_spk_id):
     else:
         valid_spk_num = test_spk_id + 1
 
-    data_split["valid"].extend(speaker_dict[str(valid_spk_num)])
+    data_split["valid"].extend(speaker_dict[valid_spk_num])
 
     for i in range(1, 11):
         if i != valid_spk_num and i != test_spk_id:
-            data_split["train"].extend(speaker_dict[str(i)])
+            data_split["train"].extend(speaker_dict[i])
 
     return data_split
 
@@ -249,17 +247,11 @@ def transform_data(path_loadSession):
     >>> transform_data(data_original, data_transformed)
     """
 
-    speaker_dict = {str(i + 1): [] for i in range(10)}
+    speaker_dict = {i + 1: [] for i in range(10)}
 
-    speaker_count = 0
-    for k in range(5):
-        session = load_session("%s%s" % (path_loadSession, k + 1))
-        for idx in range(len(session)):
-            if session[idx][2] == "F":
-                speaker_dict[str(speaker_count + 1)].append(session[idx])
-            else:
-                speaker_dict[str(speaker_count + 2)].append(session[idx])
-        speaker_count += 2
+    session = load_session(path_loadSession)
+    for sess in session:
+        speaker_dict[sess[2]].append([sess[0], sess[1]])
 
     return speaker_dict
 
@@ -303,41 +295,55 @@ def load_session(pathSession):
         improvisedUtteranceList: list
             List of improvised utterancefor IEMOCAP session.
     """
-    pathEmo = pathSession + "/dialog/EmoEvaluation/"
-    pathWavFolder = pathSession + "/sentences/wav/"
 
     improvisedUtteranceList = []
-    for emoFile in [
-        f
-        for f in os.listdir(pathEmo)
-        if os.path.isfile(os.path.join(pathEmo, f))
-    ]:
-        for utterance in load_utterInfo(pathEmo + emoFile):
-            if (
-                (utterance[3] == "neu")
-                or (utterance[3] == "hap")
-                or (utterance[3] == "sad")
-                or (utterance[3] == "ang")
-                or (utterance[3] == "exc")
-            ):
-                path = (
-                    pathWavFolder
-                    + utterance[2][:-5]
-                    + "/"
-                    + utterance[2]
-                    + ".wav"
-                )
+    for path in Path(pathSession).glob("**/*.wav"):
 
-                label = utterance[3]
-                if label == "exc":
-                    label = "hap"
-
-                if emoFile[7] != "i" and utterance[2][7] == "s":
-                    improvisedUtteranceList.append(
-                        [path, label, utterance[2][18]]
-                    )
-                else:
-                    improvisedUtteranceList.append(
-                        [path, label, utterance[2][15]]
-                    )
+        speaker_id = get_speakerid_from_path(path)
+        if speaker_id is not None:
+            label = get_emotion_from_path(path)
+            improvisedUtteranceList.append(
+                [str(path), label, speaker_id]
+            )
     return improvisedUtteranceList
+
+def get_emotion_from_path(path):
+    emotion = None
+    emotion = os.path.basename(os.path.dirname(path)).lower()
+    if emotion == "angry":
+        emotion = "anger"
+    if emotion == "happy":
+        emotion = "joy"
+    if emotion == "sad":
+        emotion = "sadness"
+
+    if emotion is None:
+        raise TypeError('emotion could not be extracted from filename')
+    
+    return emotion
+
+def get_speakerid_from_path(path):
+    speaker_id = None
+    speaker = os.path.split(os.path.split(os.path.dirname(path))[0])[1]
+    if speaker == "0011":
+        speaker_id = 1
+    if speaker == "0012":
+        speaker_id = 2
+    if speaker == "0013":
+        speaker_id = 3
+    if speaker == "0014":
+        speaker_id = 4
+    if speaker == "0015":
+        speaker_id = 5
+    if speaker == "0016":
+        speaker_id = 6
+    if speaker == "0017":
+        speaker_id = 7
+    if speaker == "0018":
+        speaker_id = 8
+    if speaker == "0019":
+        speaker_id = 9
+    if speaker == "0020":
+        speaker_id = 10
+
+    return speaker_id
